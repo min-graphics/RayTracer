@@ -1,5 +1,9 @@
 #pragma once
 #include"Walnut/Image.h"
+#include"camera.h"
+
+#include"Ray.h"
+
 #include<glm/glm.hpp>
 #include<memory>
 
@@ -10,7 +14,7 @@ public:
 	Renderer() = default;
 
 	void OnResize(uint32_t width, uint32_t height);
-	void Render();
+	void Render(const Camera& m_camera);
 
 	std::shared_ptr<Walnut::Image> GetFinalImage()const
 	{
@@ -18,7 +22,7 @@ public:
 	}
 private:
 	//输入一个坐标，返回一个颜色.
-	uint32_t PerPixel(glm::vec2 coord);
+	glm::vec4 TraceRay(const Ray& ray);
 
 private:
 	std::shared_ptr<Walnut::Image> m_FinalImage;
