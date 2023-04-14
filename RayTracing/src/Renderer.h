@@ -52,8 +52,9 @@ private:
 	HitPayload Miss(const Ray& ray);
 private:
 	std::shared_ptr<Walnut::Image> m_FinalImage;
-
 	Settings m_Settings;
+
+	std::vector<uint32_t> m_ImageHorizontalIter, m_ImageVerticalIter;
 
 	const Camera* m_ActiveCamera = nullptr;//当前是成员变量不是指针就是值，不可能是引用，想什么呢，指向活动相机的指针
 	const Scene* m_ActiveScene = nullptr;//指向活动场景的指针 

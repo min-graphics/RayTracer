@@ -2,6 +2,9 @@
 
 #include"Walnut/Random.h"
 
+//多线程的并行策略头文件for_each
+#include<execution>
+
 namespace Utils
 {
 	static uint32_t ConvertToRGBA(const glm::vec4& color)
@@ -41,7 +44,19 @@ void Renderer::OnResize(uint32_t width, uint32_t height)
 	delete[] m_AccumulationData;
 	m_AccumulationData = new glm::vec4[width * height];
 
+	m_ImageHorizontalIter.resize(width);
+	m_ImageVerticalIter.resize(height);
+
+	for (uint32_t i = 0; i < width; i++)
+	{
+		m_ImageHorizontalIter[i] = i;
+	}
+	for (uint32_t i = 0; i < height; i++)
+	{
+		m_ImageVerticalIter[i] = i;
+	}
 }
+
 void Renderer::Render(const Camera& camera,const Scene& scene)
 {
 	m_ActiveCamera = &camera;
@@ -54,6 +69,28 @@ void Renderer::Render(const Camera& camera,const Scene& scene)
 
 	//const glm::vec3& rayOrigin = camera.GetPosition();
 
+	//std::for_each(),用这个for_each循环来进行并行加速
+
+#define MT 0
+#if MT
+	std::for_each(std::execution::par,m_ImageVerticalIter.begin(), m_ImageVerticalIter.end(),
+		[this](uint32_t y)
+		{
+			std::for_each(std::execution::par,m_ImageHorizontalIter.begin(), m_ImageHorizontalIter.end(),
+			[this, y](uint32_t x)
+			{
+				glm::vec4 color = PerPixel(x, y);//得到光线追踪，得到每一个像素的颜色，返回给vec4 color变量,但是这不一定是正确的，因为有时候会抗锯齿的原因，进行多重采样。而且漫反射的原因或者阴影（shadow mapping）的原因，需要我们将射线击中物体后进行反弹。
+				m_AccumulationData[x + y * m_FinalImage->GetWidth()] += color;//不用提前进行clamp操作了，因为vec4本来就可以存储浮点数
+
+				glm::vec4 accumulatedColor = m_AccumulationData[x + y * m_FinalImage->GetWidth()];
+				accumulatedColor /= (float)m_FrameIndex;
+
+				accumulatedColor = glm::clamp(accumulatedColor, glm::vec4(0.0f), glm::vec4(1.0f));//把这个变量clamp到0-1之间
+				m_ImageData[x + y * m_FinalImage->GetWidth()] = Utils::ConvertToRGBA(accumulatedColor);//把像素转化成RGBA格式
+
+			});
+		});
+#else
 	for (uint32_t y = 0; y < m_FinalImage->GetHeight(); y++)//最外层是y，是因为我们希望对cpu缓存更加的友好
 	{
 		//render every pixel
@@ -87,6 +124,8 @@ void Renderer::Render(const Camera& camera,const Scene& scene)
 		}
 		//m_FinalImage->SetData(m_ImageData);
 	}
+
+#endif
 	m_FinalImage->SetData(m_ImageData);
 
 	if (m_Settings.Accumulate)
