@@ -3,6 +3,7 @@
 #include"camera.h"
 
 #include"Ray.h"
+#include"scene.h"
 
 #include<glm/glm.hpp>
 #include<memory>
@@ -14,17 +15,37 @@ public:
 	Renderer() = default;
 
 	void OnResize(uint32_t width, uint32_t height);
-	void Render(const Camera& m_camera);
+	void Render(const Camera& m_camera,const Scene& scene);
 
 	std::shared_ptr<Walnut::Image> GetFinalImage()const
 	{
 		return m_FinalImage;
 	}
 private:
-	//输入一个坐标，返回一个颜色.
-	glm::vec4 TraceRay(const Ray& ray);
 
+	struct HitPayload
+	{
+		float HitDistance;
+		glm::vec3 WorldPosition;
+		glm::vec3 WorldNormal;
+
+		uint32_t ObjectIndex;
+	};
+
+	glm::vec4 PerPixel(uint32_t x,uint32_t y);//rayGen shader,在DX12或者vulkan中，被每个尝试渲染的像素调用，并且在该着色器中，决定是否要潜在的每个像素投射多条光线
+
+	////输入一个坐标，返回一个颜色.
+	//glm::vec4 TraceRay(const Ray& ray,const Scene& scene);
+
+	//新的TraceRay函数输入应该是射线，输出是击中物体或者没有击中物体的载荷Payload,也就是我们需要去做什么
+	HitPayload TraceRay(const Ray& ray);//Insection Shader 被集成到这个里面了
+	HitPayload ClosestHit(const Ray& ray,float HitDistance,uint32_t ObjectIndex);
+	HitPayload Miss(const Ray& ray);
 private:
 	std::shared_ptr<Walnut::Image> m_FinalImage;
 	uint32_t* m_ImageData = nullptr;
+
+	const Camera* m_ActiveCamera = nullptr;//当前是成员变量不是指针就是值，不可能是引用，想什么呢，指向活动相机的指针
+	const Scene* m_ActiveScene = nullptr;//指向活动场景的指针 
+
 };
