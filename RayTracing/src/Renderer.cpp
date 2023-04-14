@@ -83,15 +83,15 @@ glm::vec4 Renderer::PerPixel(uint32_t x,uint32_t y)
 	ray.direction = m_ActiveCamera->GetRayDirections()[y * m_FinalImage->GetWidth() + x];	//这是一个ray cast
 
 	glm::vec3 color(0.0f);
-	float multiplier = 1.0f;//衰减系数，一开始没有衰减，是1,之后小于1.间接光照只需要衰减两次就可以。
+	float multiplier = 0.5f;//衰减系数，一开始没有衰减，是1,之后小于1.间接光照只需要衰减两次就可以。
 
-	int bounces = 2;
+	int bounces = 5;
 	for (int i = 0; i < bounces; i++)
 	{
 		Renderer::HitPayload payload = TraceRay(ray);
 		if (payload.HitDistance == -1)
 		{
-			glm::vec3 skyColor = glm::vec3(0.0f, 0.0f, 0.0f);
+			glm::vec3 skyColor = glm::vec3(0.6f, 0.7f, 0.9f);
 			color += skyColor * multiplier;
 			break;//用break而不是直接return是为了不结束循环，break只是退出当前循环。
 
@@ -102,14 +102,18 @@ glm::vec4 Renderer::PerPixel(uint32_t x,uint32_t y)
 		float lightIntensitty = glm::max(glm::dot(payload.WorldNormal, -lightDirection), 0.0f);//单位向量的点积与余弦值是一样的
 
 		const Sphere& sphere = m_ActiveScene->Spheres[payload.ObjectIndex];
-		glm::vec3 sphereColor = sphere.albedo;
-		sphereColor *= lightIntensitty;
+		const Material& material = m_ActiveScene->Materials[sphere.MaterialIndex];
+
+
+		glm::vec3 sphereColor = material.Albedo;
+		sphereColor *= lightIntensitty; 
 		color += sphereColor * multiplier;
 			
 		multiplier *= 0.7f;
 
-		ray.origin = payload.WorldPosition+payload.WorldNormal*0.0001f;
-		ray.direction = glm::reflect(ray.direction, payload.WorldNormal);
+		ray.origin = payload.WorldPosition + payload.WorldNormal*0.0001f;
+		ray.direction = glm::reflect(ray.direction, 
+			payload.WorldNormal+material.Roughness * Walnut::Random::Vec3(-0.5,0.5));//用随机值来进行加权
 	}
 
 	return glm::vec4(color, 1.0f);
@@ -144,7 +148,7 @@ Renderer::HitPayload Renderer::TraceRay(const Ray& ray)
 	for (size_t i = 0; i < Renderer::m_ActiveScene->Spheres.size(); i++)
 	{
 		const Sphere& sphere = m_ActiveScene->Spheres[i];
-		float radius = sphere.radius;
+		float radius = sphere.Radius;
 		//rayDirection = glm::normalize(rayDirection);//进行归一化的开销是巨大的。
 
 		// (bx ^ 2 + by ^ 2)t ^ 2 + (2(axbx + ayby))t + (ax ^ 2 + ay ^ 2 - r ^ 2) = 0
@@ -154,7 +158,7 @@ Renderer::HitPayload Renderer::TraceRay(const Ray& ray)
 		//	r是半径
 		//	t = hit distance,t是达到的参数
 
-		glm::vec3 origin = ray.origin - sphere.position;//不去移动物体，而是去移动相机，根据相对位移，其实是一样的。
+		glm::vec3 origin = ray.origin - sphere.Position;//不去移动物体，而是去移动相机，根据相对位移，其实是一样的。
 
 		//float a = rayDirection.x * rayDirection.x + rayDirection.y * rayDirection.y + rayDirection.z* rayDirection.z;
 		float a = glm::dot(ray.direction, ray.direction);//这里的a是t^2的系数
@@ -201,14 +205,15 @@ Renderer::HitPayload Renderer::ClosestHit(const Ray& ray, float HitDistance, uin
 
 	const Sphere& closestSphere = m_ActiveScene->Spheres[ObjectIndex];
 
-	glm::vec3 origin = ray.origin - closestSphere.position;//不去移动物体，而是去移动相机，根据相对位移，其实是一样的。
+	glm::vec3 origin = ray.origin - closestSphere.Position;//不去移动物体，而是去移动相机，根据相对位移，其实是一样的。
 	payLoad.WorldPosition = origin + ray.direction * HitDistance;
 	payLoad.WorldNormal = glm::normalize(payLoad.WorldPosition);
 
-	payLoad.WorldPosition += closestSphere.position;
+	payLoad.WorldPosition += closestSphere.Position;
 
 	return payLoad;
 }
+
 Renderer::HitPayload Renderer::Miss(const Ray& ray)
 {
 	Renderer::HitPayload payLoad;
