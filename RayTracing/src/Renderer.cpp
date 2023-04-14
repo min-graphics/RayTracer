@@ -36,13 +36,21 @@ void Renderer::OnResize(uint32_t width, uint32_t height)
 
 	//delete运算符本身就会做检查，所以根本不需要我们进行if判空
 	delete[] m_ImageData;
-	
 	m_ImageData = new uint32_t[width * height];
+
+	delete[] m_AccumulationData;
+	m_AccumulationData = new glm::vec4[width * height];
+
 }
 void Renderer::Render(const Camera& camera,const Scene& scene)
 {
 	m_ActiveCamera = &camera;
 	m_ActiveScene = &scene;
+
+	if (m_FrameIndex == 1)
+	{
+		memset(m_AccumulationData, 0, m_FinalImage->GetWidth() * m_FinalImage->GetHeight()*sizeof(glm::vec4));//memset设置内存的时候，不要忘了*sizeof()
+	}
 
 	//const glm::vec3& rayOrigin = camera.GetPosition();
 
@@ -58,13 +66,20 @@ void Renderer::Render(const Camera& camera,const Scene& scene)
 			//应该是per pixel才对
 			//const glm::vec3& rayDirection = camera.GetRayDirections()[y*m_FinalImage->GetWidth()+x];
 	
-			PerPixel(x,y);//每个像素都要调用这个函数
+			//PerPixel(x,y);//每个像素都要调用这个函数
 
 			//ray.direction = camera.GetRayDirections()[y * m_FinalImage->GetWidth() + x];	//这是一个ray cast,但是这个会被移动到PerPixel()当中去
 			
+			//m_AccumulationData[x + y * m_FinalImage->GetWidth()] = glm::vec4(0.0f);
+
 			glm::vec4 color = PerPixel(x,y);//得到光线追踪，得到每一个像素的颜色，返回给vec4 color变量,但是这不一定是正确的，因为有时候会抗锯齿的原因，进行多重采样。而且漫反射的原因或者阴影（shadow mapping）的原因，需要我们将射线击中物体后进行反弹。
-			color = glm::clamp(color, glm::vec4(0.0f), glm::vec4(1.0f));//把这个变量clamp到0-1之间
-			m_ImageData[x + y * m_FinalImage->GetWidth()] = Utils::ConvertToRGBA(color);//把像素转化成RGBA格式
+			m_AccumulationData[x + y * m_FinalImage->GetWidth()] += color;//不用提前进行clamp操作了，因为vec4本来就可以存储浮点数
+
+			glm::vec4 accumulatedColor = m_AccumulationData[x + y * m_FinalImage->GetWidth()];
+			accumulatedColor /= (float)m_FrameIndex;
+			
+			accumulatedColor = glm::clamp(accumulatedColor, glm::vec4(0.0f), glm::vec4(1.0f));//把这个变量clamp到0-1之间
+			m_ImageData[x + y * m_FinalImage->GetWidth()] = Utils::ConvertToRGBA(accumulatedColor);//把像素转化成RGBA格式
 
 			////m_ImageData[i] = 0xffff00ff;//从左往右读是ABGR，右往左读是RGBA，这是小端排列吧
 			//m_ImageData[i] = Walnut::Random::UInt();//随机的一个整型
@@ -73,6 +88,15 @@ void Renderer::Render(const Camera& camera,const Scene& scene)
 		//m_FinalImage->SetData(m_ImageData);
 	}
 	m_FinalImage->SetData(m_ImageData);
+
+	if (m_Settings.Accumulate)
+	{
+		m_FrameIndex++;
+	}
+	else
+	{
+		m_FrameIndex = 1;
+	}
 }
 
 glm::vec4 Renderer::PerPixel(uint32_t x,uint32_t y)
@@ -109,7 +133,7 @@ glm::vec4 Renderer::PerPixel(uint32_t x,uint32_t y)
 		sphereColor *= lightIntensitty; 
 		color += sphereColor * multiplier;
 			
-		multiplier *= 0.7f;
+		multiplier *= 0.5f;
 
 		ray.origin = payload.WorldPosition + payload.WorldNormal*0.0001f;
 		ray.direction = glm::reflect(ray.direction, 
@@ -167,14 +191,12 @@ Renderer::HitPayload Renderer::TraceRay(const Ray& ray)
 
 		//quadratic forumula discriminant
 		//b^2-4ac
-
 		float discriminant = b * b - 4.0f * a * c;
 		if (discriminant < 0.0f)
 		{
 			//return glm::vec4(0, 0, 0, 1);//0xff000000;//再循环里就不是return了，要去找下一个，continue
 			continue;
 		}
-
 		//  (-b +- sqrt(discriminant))/2a
 		//float t0 = (-b + glm::sqrt(discriminant)) / (2.0f * a);这个不会被用到
 		float closestT = (-b - glm::sqrt(discriminant)) / (2.0f * a);//较小值

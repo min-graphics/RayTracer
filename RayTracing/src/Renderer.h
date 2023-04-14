@@ -12,6 +12,11 @@
 class Renderer
 {
 public:
+	struct Settings
+	{
+		bool Accumulate = true;
+	};
+public:
 	Renderer() = default;
 
 	void OnResize(uint32_t width, uint32_t height);
@@ -21,6 +26,10 @@ public:
 	{
 		return m_FinalImage;
 	}
+
+	void ResetFrameIndex() { m_FrameIndex = 1; };
+
+	Settings& GetSettings() { return m_Settings; };
 private:
 
 	struct HitPayload
@@ -43,9 +52,16 @@ private:
 	HitPayload Miss(const Ray& ray);
 private:
 	std::shared_ptr<Walnut::Image> m_FinalImage;
-	uint32_t* m_ImageData = nullptr;
+
+	Settings m_Settings;
 
 	const Camera* m_ActiveCamera = nullptr;//当前是成员变量不是指针就是值，不可能是引用，想什么呢，指向活动相机的指针
 	const Scene* m_ActiveScene = nullptr;//指向活动场景的指针 
+
+	uint32_t* m_ImageData = nullptr;
+
+	glm::vec4* m_AccumulationData = nullptr;//路径追踪中用来累计数据的指针数组
+
+	uint32_t m_FrameIndex = 1;//当前帧数，要用来做除法里的除数
 
 };
